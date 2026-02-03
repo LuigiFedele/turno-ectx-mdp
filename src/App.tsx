@@ -9,10 +9,10 @@ const DIA_BASE = new Date("2026-01-01T00:00:00")
 
 const TURNOS = ["A", "B", "C", "D"] as const
 const OFFSETS: Record<string, number> = {
-  A: 0,
+  D: 0,
   B: 2,
   C: 4,
-  D: 6,
+  A: 6,
 }
 
 // ===== LÓGICA DA ESCALA =====
