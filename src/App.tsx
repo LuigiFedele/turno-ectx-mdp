@@ -129,7 +129,7 @@ export default function App() {
               type="date"
               value={dataSelecionada}
               onChange={(e) => setDataSelecionada(e.target.value)}
-              className="max-w-xs"
+              className="max-w-xs w-full"
             />
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
