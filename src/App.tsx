@@ -3,50 +3,62 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Sun, Moon } from "lucide-react"
+import { CICLO_84 } from "./database/ciclo-84"
 
-// ===== CONFIGURAÇÃO DA ESCALA =====
+// ================= CONFIGURAÇÃO =================
 const DIA_BASE = new Date("2026-01-01T00:00:00")
 
 const TURNOS = ["A", "B", "C", "D"] as const
-const OFFSETS: Record<string, number> = {
-  D: 0,
-  B: 2,
-  C: 4,
-  A: 6,
+type Turno = typeof TURNOS[number]
+
+type Periodo = "manha" | "tarde" | "noite"
+
+// ================= FUNÇÕES AUXILIARES =================
+function diffDias(data: Date, base: Date) {
+  const d1 = new Date(data.getFullYear(), data.getMonth(), data.getDate())
+  const d2 = new Date(base.getFullYear(), base.getMonth(), base.getDate())
+  return Math.floor((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-// ===== LÓGICA DA ESCALA =====
-function getTurnoByDateTime(dateTime: Date) {
-  const hora = dateTime.getHours()
+function getPeriodo(date: Date): Periodo {
+  const h = date.getHours() + date.getMinutes() / 60
 
-  // Madrugada pertence ao dia anterior
+  if (h >= 7 && h < 15) return "manha"
+  if (h >= 15 && h < 23) return "tarde"
+  return "noite"
+}
+
+// ================= LÓGICA DA ESCALA =================
+function getEscalaByDateTime(dateTime: Date) {
+  const periodo = getPeriodo(dateTime)
+
+  // Madrugada (00–06:59) pertence ao dia anterior
   const dataEscala =
-    hora < 7
-      ? new Date(dateTime.getFullYear(), dateTime.getMonth(), dateTime.getDate() - 1)
-      : new Date(dateTime.getFullYear(), dateTime.getMonth(), dateTime.getDate())
+    periodo === "noite" && dateTime.getHours() < 7
+      ? new Date(
+          dateTime.getFullYear(),
+          dateTime.getMonth(),
+          dateTime.getDate() - 1
+        )
+      : new Date(
+          dateTime.getFullYear(),
+          dateTime.getMonth(),
+          dateTime.getDate()
+        )
 
-  const faixaIndice =
-    hora >= 7 && hora < 15 ? 0 :
-    hora >= 15 && hora < 23 ? 2 : 4
+  const dias = diffDias(dataEscala, DIA_BASE)
+  const indice = ((dias % 84) + 84) % 84
 
-  const dias =
-    Math.floor(
-      (dataEscala.getTime() - DIA_BASE.getTime()) / (1000 * 60 * 60 * 24)
-    ) % 8
+  const escalaDia = CICLO_84[indice]
 
-  for (const turno of TURNOS) {
-    const indiceTurno = (dias + OFFSETS[turno] + 8) % 8
-    const indiceNormalizado = Math.floor(indiceTurno / 2) * 2
-
-    if (indiceNormalizado === faixaIndice) {
-      return turno
-    }
+  return {
+    periodoAtual: periodo,
+    turnoAtual: escalaDia[periodo] as Turno,
+    periodos: escalaDia,
   }
-
-  return "—"
 }
 
-// ===== COMPONENTE =====
+// ================= COMPONENTE =================
 export default function App() {
   const [agora, setAgora] = useState(new Date())
   const [dataSelecionada, setDataSelecionada] = useState(() => {
@@ -58,49 +70,44 @@ export default function App() {
     document.documentElement.classList.contains("dark")
   )
 
-  // Atualiza o horário atual
+  // Atualiza horário atual
   useEffect(() => {
     const timer = setInterval(() => setAgora(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  // Controle do tema
+  // Controle de tema
   useEffect(() => {
-    if (dark) {
-      document.documentElement.classList.add("dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-    }
+    if (dark) document.documentElement.classList.add("dark")
+    else document.documentElement.classList.remove("dark")
   }, [dark])
 
-  const turnoAtual = getTurnoByDateTime(agora)
+  const { turnoAtual } = getEscalaByDateTime(agora)
 
-  // Turnos do dia (usando horas representativas)
-  const turnosDoDia: Record<string, string> = {}
+  // ===== Escala do dia selecionado =====
+  const turnosDoDia: Record<Turno, string> = {
+    A: "FOLGA",
+    B: "FOLGA",
+    C: "FOLGA",
+    D: "FOLGA",
+  }
 
-  TURNOS.forEach((turno) => (turnosDoDia[turno] = "FOLGA"))
+  const dataBase = new Date(`${dataSelecionada}T12:00:00`)
+  const escalaDia = getEscalaByDateTime(dataBase).periodos
 
-  const dataBase = new Date(`${dataSelecionada}T00:00:00`)
+  turnosDoDia[escalaDia.manha as Turno] = "07–15"
+  turnosDoDia[escalaDia.tarde as Turno] = "15–23"
+  turnosDoDia[escalaDia.noite as Turno] = "23–07"
 
-  const periodos = [
-    { label: "07–15", hora: 8 },
-    { label: "15–23", hora: 16 },
-    { label: "23–07", hora: 2 },
-  ]
-
-  periodos.forEach(({ label, hora }) => {
-    const dt = new Date(dataBase)
-    dt.setHours(hora, 0, 0, 0)
-    const turno = getTurnoByDateTime(dt)
-    turnosDoDia[turno] = label
-  })
-
+  // ================= UI =================
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* HEADER */}
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Escala de Turnos - Eucatex MDP</h1>
+          <h1 className="text-2xl font-bold">
+            Escala de Turnos - Eucatex MDP
+          </h1>
           <Button variant="outline" size="icon" onClick={() => setDark(!dark)}>
             {dark ? <Sun size={18} /> : <Moon size={18} />}
           </Button>
@@ -122,7 +129,9 @@ export default function App() {
         {/* SELEÇÃO DE DATA */}
         <Card>
           <CardHeader>
-            <CardTitle>Selecione a data e descubra o turno que irá trabalhar</CardTitle>
+            <CardTitle>
+              Selecione a data e descubra o turno que irá trabalhar
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
