@@ -74,6 +74,10 @@
     --sidebar-ring: oklch(0.556 0 0);
 }
 
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
 @theme inline {
     --font-sans: 'Inter Variable', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
@@ -126,4 +130,13 @@
   html {
     @apply font-sans;
     }
+}
+
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
 }
