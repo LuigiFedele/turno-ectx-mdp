@@ -81,7 +81,7 @@ function getEscala(dateTime: Date, tipo: CicloTipo) {
 
   return {
     periodoAtual: periodo,
-    turnoAtual: escalaDia?.[periodo] ?? "FOLGA",
+    turnoAtual: escalaDia?.[periodo as keyof typeof escalaDia] ?? "FOLGA",
     periodos: escalaDia,
   }
 }
