@@ -13,6 +13,28 @@ import { formatarDataBR } from "./lib/utils"
 
 type Periodo = "manha" | "tarde" | "noite"
 type CicloTipo = "84" | "42" | "14"
+type TurnoEquipe = "A" | "B" | "C" | "D"
+
+const PERIODOS_INFO: Record<
+  Periodo,
+  { sigla: string; horario: string; classe: string }
+> = {
+  manha: {
+    sigla: "M",
+    horario: "07–15",
+    classe: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  },
+  tarde: {
+    sigla: "T",
+    horario: "15–23",
+    classe: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  },
+  noite: {
+    sigla: "N",
+    horario: "23–07",
+    classe: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  },
+}
 
 // ================= CONFIGURAÇÃO DOS CICLOS =================
 const CONFIG_CICLOS = {
@@ -86,10 +108,117 @@ function getEscala(dateTime: Date, tipo: CicloTipo) {
   }
 }
 
+function getTurnosDisponiveis(tipo: CicloTipo): TurnoEquipe[] {
+  if (tipo === "84") return ["A", "B", "C", "D"]
+  if (tipo === "42") return ["A", "B", "C"]
+  return ["A", "B"]
+}
+
+function getPeriodoDoTurno(
+  data: Date,
+  tipo: CicloTipo,
+  turno: TurnoEquipe
+): Periodo | null {
+  const periodos = getEscala(data, tipo).periodos
+  const periodo = Object.entries(periodos ?? {}).find(
+    ([, turnoEscalado]) => turnoEscalado === turno
+  )?.[0]
+
+  if (periodo === "manha" || periodo === "tarde" || periodo === "noite") {
+    return periodo
+  }
+  return null
+}
+
+function CalendarioAnual({
+  ano,
+  tipo,
+  turno,
+}: {
+  ano: number
+  tipo: CicloTipo
+  turno: TurnoEquipe
+}) {
+  const meses = Array.from({ length: 12 }, (_, mes) => {
+    const primeiroDia = new Date(ano, mes, 1)
+    const diasNoMes = new Date(ano, mes + 1, 0).getDate()
+
+    return {
+      nome: primeiroDia.toLocaleDateString("pt-BR", { month: "long" }),
+      deslocamento: primeiroDia.getDay(),
+      dias: Array.from({ length: diasNoMes }, (_, indice) => indice + 1),
+    }
+  })
+  const hoje = new Date()
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {meses.map((mes, indiceMes) => (
+        <Card key={mes.nome}>
+          <CardHeader className="pb-3">
+            <CardTitle className="capitalize">
+              {mes.nome} / {ano}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4">
+            <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
+              {["D", "S", "T", "Q", "Q", "S", "S"].map((dia, indice) => (
+                <div key={`${dia}-${indice}`} className="pb-1 font-medium">
+                  {dia}
+                </div>
+              ))}
+              {Array.from({ length: mes.deslocamento }, (_, indice) => (
+                <div key={`vazio-${indice}`} aria-hidden="true" />
+              ))}
+              {mes.dias.map((dia) => {
+                const data = new Date(ano, indiceMes, dia, 12)
+                const periodo = getPeriodoDoTurno(data, tipo, turno)
+                const infoPeriodo = periodo ? PERIODOS_INFO[periodo] : null
+                const ehHoje =
+                  data.getDate() === hoje.getDate() &&
+                  data.getMonth() === hoje.getMonth() &&
+                  data.getFullYear() === hoje.getFullYear()
+                const dataFormatada = data.toLocaleDateString("pt-BR")
+
+                return (
+                  <div
+                    key={dia}
+                    title={`${dataFormatada}: ${
+                      infoPeriodo
+                        ? `trabalha das ${infoPeriodo.horario}`
+                        : "folga"
+                    }`}
+                    aria-label={`${dataFormatada}: ${
+                      infoPeriodo
+                        ? `trabalha das ${infoPeriodo.horario}`
+                        : "folga"
+                    }`}
+                    className={`flex min-h-12 flex-col items-center justify-center rounded-md border text-xs ${
+                      infoPeriodo
+                        ? infoPeriodo.classe
+                        : "border-border bg-muted/30 text-muted-foreground"
+                    } ${ehHoje ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : ""}`}
+                  >
+                    <span className="font-medium">{dia}</span>
+                    <span className="font-bold">{infoPeriodo?.sigla ?? "F"}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
 // ================= COMPONENTE =================
 export default function App() {
   const [agora, setAgora] = useState(new Date())
   const [cicloSelecionado, setCicloSelecionado] = useState<CicloTipo>("84")
+  const [cicloAnual, setCicloAnual] = useState<CicloTipo>("84")
+  const [turnoAnual, setTurnoAnual] = useState<TurnoEquipe>("A")
+  const [anoAnual, setAnoAnual] = useState(new Date().getFullYear())
   const [dataSelecionada, setDataSelecionada] = useState(() => {
     const hoje = new Date()
     return hoje.toISOString().split("T")[0]
@@ -125,12 +254,7 @@ export default function App() {
   const dataBase = new Date(`${dataSelecionada}T12:00:00`)
   const escalaDiaSelecionado = getEscala(dataBase, cicloSelecionado)
 
-  const turnosDisponiveis =
-    cicloSelecionado === "84"
-      ? ["A", "B", "C", "D"]
-      : cicloSelecionado === "42"
-      ? ["A", "B", "C"]
-      : ["A", "B"]
+  const turnosDisponiveis = getTurnosDisponiveis(cicloSelecionado)
 
   const turnosDoDia: Record<string, string> = {}
   turnosDisponiveis.forEach((t) => (turnosDoDia[t] = "FOLGA"))
@@ -294,6 +418,110 @@ export default function App() {
               </div>
             </div>
 
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* CONSULTA ANUAL */}
+      <div>
+        <h2 className="text-xl font-semibold mb-2">
+          🗓️ Consultar escala anual
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Selecione o ano, a escala e o turno para consultar os dias de trabalho
+          e de folga ao longo do ano.
+        </p>
+
+        <Card>
+          <CardContent className="space-y-6 pt-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="flex flex-col gap-2">
+                <label htmlFor="ano-anual" className="text-sm font-medium">
+                  Ano
+                </label>
+                <input
+                  id="ano-anual"
+                  type="number"
+                  min="100"
+                  step="1"
+                  value={anoAnual}
+                  onChange={(e) => {
+                    const ano = e.currentTarget.valueAsNumber
+                    if (Number.isInteger(ano) && ano >= 100) {
+                      setAnoAnual(ano)
+                    }
+                  }}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label htmlFor="escala-anual" className="text-sm font-medium">
+                  Tipo de escala
+                </label>
+                <select
+                  id="escala-anual"
+                  value={cicloAnual}
+                  onChange={(e) => {
+                    const novoCiclo = e.target.value as CicloTipo
+                    setCicloAnual(novoCiclo)
+                    if (!getTurnosDisponiveis(novoCiclo).includes(turnoAnual)) {
+                      setTurnoAnual("A")
+                    }
+                  }}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="84">Escala 49</option>
+                  <option value="42">Escala 95</option>
+                  <option value="14">Escala 47</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label htmlFor="turno-anual" className="text-sm font-medium">
+                  Turno
+                </label>
+                <select
+                  id="turno-anual"
+                  value={turnoAnual}
+                  onChange={(e) =>
+                    setTurnoAnual(e.target.value as TurnoEquipe)
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {getTurnosDisponiveis(cicloAnual).map((turno) => (
+                    <option key={turno} value={turno}>
+                      Turno {turno}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+              {Object.entries(PERIODOS_INFO).map(([periodo, info]) => (
+                <span key={periodo} className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex size-6 items-center justify-center rounded border text-xs font-bold ${info.classe}`}
+                  >
+                    {info.sigla}
+                  </span>
+                  {info.horario}
+                </span>
+              ))}
+              <span className="flex items-center gap-2">
+                <span className="inline-flex size-6 items-center justify-center rounded border border-border bg-muted/30 text-xs font-bold text-muted-foreground">
+                  F
+                </span>
+                Folga
+              </span>
+            </div>
+
+            <CalendarioAnual
+              ano={anoAnual}
+              tipo={cicloAnual}
+              turno={turnoAnual}
+            />
           </CardContent>
         </Card>
       </div>
